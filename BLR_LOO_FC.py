@@ -12,7 +12,7 @@ import numpy as np
 sub = 1 # subject number
 cohlevel = 30 # coherence level
 FC = 'FC' # face/car trials
-#%%
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 print 'Reading events'
 
 """
@@ -50,7 +50,7 @@ single_subject = loadmat(path + 'jeremy15jul04/events_jeremy15jul04.mat')
 # 'car_responses', 'face_idxs', 'car_trials', 'car_idxs', '__version__']
 
 # GLOBAL VARIABLES
-rej = subjects['rejections'][0][sub]
+rej = subjects['rejections'][0][sub-1]
 
 # VARIABLES SPECIFIC TO A SUBJECT
 coh_values = single_subject['coh_values'][0]
@@ -65,6 +65,8 @@ ict_face = np.empty(0)
 ict_car = np.empty(0)
 stim_offset_face = np.empty(0)
 stim_offset_car = np.empty(0)
+n_trials_face = np.empty(0)
+n_trials_car = np.empty(0)
 for row_idx in range(len(correctstimevents)): 
     ct_face = np.append(ct_face,correctstimevents[:, coh_idx][row_idx][0])
     ct_car = np.append(ct_car,correctstimevents[:, len(coh_values) + coh_idx][row_idx][0])
@@ -72,57 +74,37 @@ for row_idx in range(len(correctstimevents)):
     ict_car = np.append(ict_car,correctstimevents[:, len(coh_values) + coh_idx][row_idx][0])   
     stim_offset_face = np.append(stim_offset_face, single_subject['face_idxs'][0][coh_idx][0][row_idx][0])
     stim_offset_car = np.append(stim_offset_face, single_subject['car_idxs'][0][coh_idx][0][row_idx][0])
-
+    n_trials_face = np.append(n_trials_face,
+                              len(single_subject['face_idxs'].flatten()[coh_idx].flatten()[row_idx].flatten()))
+    n_trials_car = np.append(n_trials_car,
+                              len(single_subject['car_idxs'].flatten()[coh_idx].flatten()[row_idx].flatten()))
+    
+artifact_rej_face = np.ones(len(stim_offset_face))
+artifact_rej_face[rej[0][coh_idx].flatten()]=0
+artifact_rej_car = np.ones(len(stim_offset_car))
+artifact_rej_car[rej[1][coh_idx].flatten()]=0
 CorrectRespFace = [stim_offset_face[idx] in ct_face for idx in range(len(stim_offset_face)) ]
 CorrectRespCar = [stim_offset_car[idx] in ct_car for idx in range(len(stim_offset_car)) ]   
  
 events = dict()
 
-events['F'] = {'idxs': single_subject['face_idxs'][0],
+events['F'] = {'idxs': single_subject['face_idxs'].flatten(),
                'StimOffsets': stim_offset_face,
                'RTs': responsetimes[coh_idx][0][0][0],
                'allcorrects': ct_face,
                'allincorrects': ict_face,
-               'CorrectResp': CorrectRespFace
+               'CorrectResp': CorrectRespFace,
+               'ArtifactRej':artifact_rej_face,
+               'nTrials': n_trials_face
                }
-events['C'] = {'idxs': single_subject['car_idxs'][0],
+events['C'] = {'idxs': single_subject['car_idxs'].flatten(),
                'StimOffsets': stim_offset_car,
                'RTs': responsetimes[len(coh_values) + coh_idx][0][0][0],
                'allcorrects': ct_car,
                'allincorrects': ict_car,
-               'CorrectResp': CorrectRespCar
+               'CorrectResp': CorrectRespCar,
+               'ArtifactRej': artifact_rej_car,
+               'nTrials': n_trials_car
                }
-
-
-
-
-#for i=1:length(FC)
-#    if upper(FC(i))=='F'
-#        events=face_idxs;
-#        r=0;
-#    elseif upper(FC(i))=='C'
-#        events=car_idxs;
-#        r=1;
-#    end
-#    for j=1:length(cohlevel)
-#        k=find(coh_values==cohlevel(j));
-#        StimOffsets{i,j}=cell2mat(events{k});
-#        RTs{i,j}=cell2mat(responsetimes{r*length(coh_values)+k});
-#        allcorrects=cell2mat(correctstimevents(:,r*length(coh_values)+k)');
-#        allincorrects=cell2mat(incorrectstimevents(:,r*length(coh_values)+k)');
-#        CorrectResp{i,j}=ismember(StimOffsets{i,j},allcorrects);
-#        if sum(xor(CorrectResp{i,j},~ismember(StimOffsets{i,j},allincorrects)))
-#            error('correct trials and incorrect trials indices do not match!');
-#        end
-#        ArtifactRej{i,j}=true(size(StimOffsets{i,j}));
-#        ArtifactRej{i,j}(rej{r+1,k})=false;
-#        
-#        nTrials(:,i,j)=[length(events{k}{1}),length(events{k}{2}),...
-#                        length(events{k}{3}),length(events{k}{4})];
-#    end
-#end
-
-
-
-
-#%%
+print '-'*20 + 'Reading events completed' + '-'*20
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
