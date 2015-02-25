@@ -104,6 +104,7 @@ print '-'*20 + 'Reading events completed' + '-'*20
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% load dataset
 
+# Probably don't need this anymore
 print 'Loading EEG data set' + '-'*44
 filename_filtered = path + my_subject + '/facecoherence_filtered'
 channel=range(2,62); # scalp electrodes only
@@ -114,6 +115,7 @@ StartOffset=-200;
 duration=1000-StartOffset;
 Unit=1e7;
 
+# Probably don't need this anymore
 print 'Reading header file'+ '-'*20
 import pandas as pd
 header = pd.read_csv(filename_filtered + '.hdr', delimiter=';')
@@ -122,49 +124,24 @@ N = header.loc[1][0] # number of samples in data file
 fs = 1/(header.loc[2][0]) # sampling rate
 gain = header.loc[3][0] # gain
 
-#function [D,N,fs,gain] = readheader(filename)
-#
-#% [D,N,fs,gain] = readheader(file)
-#
-#fid = fopen([filename '.hdr'],'r');
-#line = fgetl(fid);
-#line = fgetl(fid); D = sscanf(line,'%d');
-#line = fgetl(fid); N = sscanf(line,'%d');
-#line = fgetl(fid); fs = 1/sscanf(line,'%f');
-#line = fgetl(fid); gain = sscanf(line,'%f');
-#fclose(fid);
+print 'Loading pre-processed data' + '-'*10
+path_preprocessed = '../preprocessed_for_python/' + my_subject + '/' + 'Coh' + str(cohlevel) + '.mat'
+EEG = loadmat(path_preprocessed)
+       # keys: 'eeg_face', 'eeg_car'
+       # np.shape(EEG['EEG_face']) = 60 x 1200 x 30
+       # EEG['EEG_car'].size = 60 x 1200 x 40
 
-#% Load EEG data
-#% [eegdata,D,N,fs,gain,events]=readcogdata(filename,channel,gaincorrect,duration,offset,m,show);
-#%
-#% Input:
-#% 'filename'    - [string] full path to data file
-#% 'channel'     - channels to read [all channels]
-#% 'gaincorrect' - 1 - apply gain; 0 - do no apply gain [1] 
-#% 'duration'    - number of samples to read [all samples]
-#% 'offset'      - sample number to begin reading [1]
-#% 'm'           - output of calibrate.m to discretize event channel
-#% 'show'        - 1 - display progress; 0 - do not display progress [1]
-#%
-#% Output:
-#% 'eegdata'     - [channels x samples] EEG data
-#% 'D'           - number of channels in filename
-#% 'N'           - number of samples in data file 
-#% 'fs'          - sampling rate
-#% 'gain'        - gain
-#% 'events'      - discretized eegdata (useful for event channel)
-#%    
-#% Example:
-#% [m,s]= calibrate(fileevent); % e.g. fileevent=jumptest 
-#% [D,N,fs,gain] = readheader(filein);
-#% [eventchannel,D,N,fs,gain,discreteeventchannel]=readcogdata(filein,64,0,N,1,m,1);
+print 'Initialization' + '-'*10
+chan = np.shape(EEG['EEG_face'])[0]
+tmin = StartOffset
+timebin_onset = range(0, 100, 50)
+timebin_onset.extend(range(150,450,10))
+timebin_onset.extend(range(500,700,50))
+L_timebin = 30 # length of the timebin (ms)
+Nsample = round(L_timebin/float(1000)*Fs)
+Nface = np.shape(EEG['EEG_face'])[2]*Nsample
+Ncar = np.shape(EEG['EEG_car'])[2]*Nsample
 
-#eventindices=StimOffsets{1};
-#eegdata1=readcogdata(filename,channel,gaincorrect,duration,eventindices+StartOffset);
-#EEG1=reshape(eegdata1,length(channel),duration,[])*Unit;
-#eventindices=StimOffsets{2};
-#eegdata2=readcogdata(filename,channel,gaincorrect,duration,eventindices+StartOffset);
-#EEG2=reshape(eegdata2,length(channel),duration,[])*Unit;
 
 
 
