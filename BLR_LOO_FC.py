@@ -12,6 +12,7 @@ import numpy as np
 from scipy.io import loadmat
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score
+from sklearn.metrics import roc_curve, auc
 
 sub = 1 # subject number
 cohlevel = 30 # coherence level
@@ -160,7 +161,7 @@ y = np.append(np.ones(Nface), np.zeros(Ncar))
 Ntrial = (Nface+Ncar)/Nsample
 beta, y_LOO ,LOO = [], [], [] # we probably don't need this anymore
                               # thanks to scikit library
-acc, predictions = [], []
+acc, predictions, confidence_scores = [], [], []
 for k in range(Ntrial):
     LOO_index = range((k-1)*Nsample, k*Nsample)
     train_index = list(set(range(Nface+Ncar))-set(LOO_index)) # remove one trial from dataset
@@ -172,16 +173,20 @@ for k in range(Ntrial):
                                  # good to know this but we will later use theano
                                  # for more complex algorithms
     model = model.fit(X[train_index,:], y[train_index])
+    confidence_scores.append( model.decision_function(np.mean(X[LOO_index,:],0)) )
+                             # The confidence score for a sample is the signed
+                             # distance of that sample to the hyperplane.  
     predictions.append( model.predict(np.mean(X[LOO_index,:],0)) ) # compute predictions
                                                                    # we use average over 30 samples
-
+ 
 acc.append( accuracy_score(y[range(0,2100, Nsample)],predictions) ) # scikit's accuracy_score function
                                                            # computes Accuracy classification score
                                                            # note that I had to downsample y
                                                            # because I don't need all 2100 samples
                                                            # I only need 70 trials
 
-
+fpr, tpr, thresholds = roc_curve(y[range(0,2100, Nsample)], confidence_scores)
+auc = auc(fpr,tpr)
 
 
 
