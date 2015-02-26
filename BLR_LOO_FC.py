@@ -134,15 +134,35 @@ EEG = loadmat(path_preprocessed)
 print 'Initialization' + '-'*10
 chan = np.shape(EEG['EEG_face'])[0]
 tmin = StartOffset
-timebin_onset = range(0, 100, 50)
-timebin_onset.extend(range(150,450,10))
-timebin_onset.extend(range(500,700,50))
+timebin_onset = range(0, 150, 50)
+timebin_onset.extend(range(150,460,10))
+timebin_onset.extend(range(500,750,50))
 L_timebin = 30 # length of the timebin (ms)
-Nsample = round(L_timebin/float(1000)*Fs)
+Nsample = int(round(L_timebin/float(1000)*Fs))
 Nface = np.shape(EEG['EEG_face'])[2]*Nsample
 Ncar = np.shape(EEG['EEG_car'])[2]*Nsample
 
+# LOO loop
+tt = 2
+print ('LR using time bin %s - %s ms ...')%(timebin_onset[tt],timebin_onset[tt]+L_timebin)
+x1 = int(round((timebin_onset[tt]-tmin)*Fs/1000));
+xbin = x1 + np.arange(Nsample)
+data1 = EEG['EEG_face'][:,xbin,:].reshape(chan, Nface) # 900 x 60
+data1 = np.transpose(data1)
+data2 = EEG['EEG_car'][:,xbin,:].reshape(chan, Ncar) # 1200 x 60
 
+#%% LOO loop
+#for tt=1:length(timebin_onset)
+#    disp(['LR using timebin ' num2str(timebin_onset(tt)) '-' ...
+#         num2str(timebin_onset(tt)+L_timebin) ' ms ...']);
+#    %% create dataset
+#    x1 = round((timebin_onset(tt)-tmin)*Fs/1000)+1; 
+#    xbin=x1+round(linspace(0,maxNsample-1,Nsample));
+#    data1 = reshape(EEG1(chan,xbin,:),length(chan),[])';
+#    data2 = reshape(EEG2(chan,xbin,:),length(chan),[])';
+#    x = double([data1; data2]); % Npoints*Nchan
+#    Y = [ones(N1,1)*1; zeros(N2,1)]; % Npoints*1
+#    clear data1 data2
 
 
 
