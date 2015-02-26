@@ -10,6 +10,8 @@ This is a python version of Marios' script: BLR_LOO_FC.m
 
 import numpy as np
 from scipy.io import loadmat
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score
 
 sub = 1 # subject number
 cohlevel = 30 # coherence level
@@ -147,22 +149,38 @@ tt = 2
 print ('LR using time bin %s - %s ms ...')%(timebin_onset[tt],timebin_onset[tt]+L_timebin)
 x1 = int(round((timebin_onset[tt]-tmin)*Fs/1000));
 xbin = x1 + np.arange(Nsample)
-data1 = EEG['EEG_face'][:,xbin,:].reshape(chan, Nface) # 900 x 60
-data1 = np.transpose(data1)
-data2 = EEG['EEG_car'][:,xbin,:].reshape(chan, Ncar) # 1200 x 60
+data1 = EEG['EEG_face'][:,xbin,:].reshape(chan, Nface) 
+data1 = np.transpose(data1) # 900 x 60
+data2 = EEG['EEG_car'][:,xbin,:].reshape(chan, Ncar) 
+data2 = np.transpose(data2) # 1200 x 60
+X = np.vstack((data1,data2))
+y = np.append(np.ones(Nface), np.zeros(Ncar))
 
-#%% LOO loop
-#for tt=1:length(timebin_onset)
-#    disp(['LR using timebin ' num2str(timebin_onset(tt)) '-' ...
-#         num2str(timebin_onset(tt)+L_timebin) ' ms ...']);
-#    %% create dataset
-#    x1 = round((timebin_onset(tt)-tmin)*Fs/1000)+1; 
-#    xbin=x1+round(linspace(0,maxNsample-1,Nsample));
-#    data1 = reshape(EEG1(chan,xbin,:),length(chan),[])';
-#    data2 = reshape(EEG2(chan,xbin,:),length(chan),[])';
-#    x = double([data1; data2]); % Npoints*Nchan
-#    Y = [ones(N1,1)*1; zeros(N2,1)]; % Npoints*1
-#    clear data1 data2
+# leave one out
+Ntrial = (Nface+Ncar)/Nsample
+beta, y_LOO ,LOO = [], [], [] # we probably don't need this anymore
+                              # thanks to scikit library
+acc, predictions = [], []
+for k in range(Ntrial):
+    LOO_index = range((k-1)*Nsample, k*Nsample)
+    train_index = list(set(range(Nface+Ncar))-set(LOO_index)) # remove one trial from dataset
+                                                              # sets are cool to perform set like operations
+                                                              # Here we find A-B for sets A and B
+    # instantiate a logistic regression model, and fit with X and y
+    model = LogisticRegression() # cool things start here
+                                 # scikit is a popular machine leraning library in python
+                                 # good to know this but we will later use theano
+                                 # for more complex algorithms
+    model = model.fit(X[train_index,:], y[train_index])
+    predictions.append( model.predict(np.mean(X[LOO_index,:],0)) ) # compute predictions
+                                                                   # we use average over 30 samples
+
+acc.append( accuracy_score(y[range(0,2100, Nsample)],predictions) ) # scikit's accuracy_score function
+                                                           # computes Accuracy classification score
+                                                           # note that I had to downsample y
+                                                           # because I don't need all 2100 samples
+                                                           # I only need 70 trials
+
 
 
 
