@@ -23,7 +23,7 @@ my_subject = 'jeremy15jul04'
 
 gaincorrect=1;
 Fs=1000;
-StartOffset=-200;
+StartOffset=0 #-200;
 duration=1000-StartOffset;
 Unit=1e7;
 
@@ -46,7 +46,7 @@ Nface = np.shape(EEG['EEG_face'])[2]*Nsample
 Ncar = np.shape(EEG['EEG_car'])[2]*Nsample
 
 # LOO loop
-tt = 0
+tt =0
 print ('LR using time bin %s - %s ms ...')%(timebin_onset[tt],timebin_onset[tt]+L_timebin)
 x1 = int(round((timebin_onset[tt]-tmin)*Fs/1000));
 xbin = x1 + np.arange(Nsample)
@@ -55,7 +55,7 @@ data1 = np.transpose(data1) # 900 x 60
 data2 = EEG['EEG_car'][:,xbin,:].reshape(chan, Ncar) 
 data2 = np.transpose(data2) # 1200 x 60
 X_eeg = np.vstack((data1,data2))
-y_eeg = np.append(np.ones(Nface), np.zeros(Ncar))
+y_eeg = np.append(np.ones(Nface, dtype=int), np.zeros(Ncar))
 n_features = np.shape(X_eeg)[1]
 
 class LogisticRegression_theano(object):
@@ -67,7 +67,7 @@ class LogisticRegression_theano(object):
     a class membership probability.
     """
     
-    def __init__(self, input, n_in, n_out):
+    def __init__(self, input, n_in):
         """ Initialize the parameters of the logistic regression
         
         :type input: theano.tensor.TensorType
@@ -82,7 +82,7 @@ class LogisticRegression_theano(object):
         """
         # initialize with 0 the weights as a matrix of shape (n_in, n_out)
         self.W = theano.shared(
-            value = np.zeros(n_in),
+            value = np.zeros(n_in, dtype=float),
             name = 'W',
             borrow = True
         )
@@ -153,21 +153,21 @@ class LogisticRegression_theano(object):
             )
             
         # check if y is of the correct datatype
-        if y.dtype.startswith('int'):
+        #if y.dtype.startswith('int'):
             # the T.neq operator returns a vector of 0s and 1s
             # where 1 reprsents a mistake in prediction
-            return T.mean(T.neq(self.y_pred, y))
-        else:
-            raise NotImplementedError()
+        return T.mean(T.neq(self.y_pred, y))
+        #else:
+        #    raise NotImplementedError()
 
 """ Generate symbolic variables for input (X and y
 represent a minibatch)
 """
 X = T.matrix('X') # 2100 x 60 data
-y = T.ivector('y') # labels, presented as 1D vector of [int] labels
+y = T.vector('y') # labels, presented as 1D vector of [int] labels
 
 """ Construct the logistic regression class """
-classifier = LogisticRegression_theano(input=X, n_in=n_features, n_out=2)
+classifier = LogisticRegression_theano(input=X, n_in=n_features)
 
 """ The cost we minimize during training is the negative likelihood
 of model in symbolic format """
@@ -191,7 +191,7 @@ updates = [(classifier.W, classifier.W - learning_rate * g_W),
 train_model = theano.function(
     inputs = [X,y],
     outputs = cost,
-    updates = updates,
+    updates = updates
 )
 
 """ Testing the Model"""
@@ -205,6 +205,40 @@ predict = theano.function(
     outputs = classifier.y_pred 
 )
 
+""" Leave One Out """
+Ntrial = (Nface+Ncar)/Nsample
+
+from sklearn.cross_validation import LeaveOneOut
+loo = LeaveOneOut(Ntrial)
+
+downsampled = np.array(range(0,np.shape(X_eeg)[0], Nsample))
+predictions = []
+training_steps = 10
+cost_all = []
+err_all=[]
+for train, test in loo:
+    print test
+    
+    Xtrain = X_eeg[downsampled[train[:]],:]
+    ytrain = y_eeg[downsampled[train[:]]]
+    Xtest = X_eeg[downsampled[test[:]],:]
+    ytest = y_eeg[downsampled[test[:]]]
+    
+    classifier.W.set_value(np.zeros(n_features, dtype=float))
+    classifier.b.set_value(0.)
+    
+    cost_single = []
+    for idx in range(training_steps):
+        cost = train_model(Xtrain, ytrain)
+        cost_single.append(cost)
+        
+    single_pred = predict(Xtest)
+    predictions.append(single_pred)    
+    cost_all.append(cost_single)
+    err = test_model(Xtest, ytest)
+    err_all.append(err)
+      
+predictions
 
 
 
@@ -217,9 +251,6 @@ predict = theano.function(
 
 
 
-
-## leave one out
-#Ntrial = (Nface+Ncar)/Nsample
 #beta, y_LOO ,LOO = [], [], [] # we probably don't need this anymore
 #                              # thanks to scikit library
 #acc, predictions, confidence_scores = [], [], []
