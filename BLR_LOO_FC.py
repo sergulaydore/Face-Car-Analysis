@@ -13,6 +13,7 @@ from scipy.io import loadmat
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score
 from sklearn.metrics import roc_curve, auc
+from sklearn.cross_validation import cross_val_score
 
 sub = 1 # subject number
 cohlevel = 30 # coherence level
@@ -145,8 +146,9 @@ Nsample = int(round(L_timebin/float(1000)*Fs))
 Nface = np.shape(EEG['EEG_face'])[2]*Nsample
 Ncar = np.shape(EEG['EEG_car'])[2]*Nsample
 
+
 # LOO loop
-tt = 2
+tt = 0
 print ('LR using time bin %s - %s ms ...')%(timebin_onset[tt],timebin_onset[tt]+L_timebin)
 x1 = int(round((timebin_onset[tt]-tmin)*Fs/1000));
 xbin = x1 + np.arange(Nsample)
@@ -163,12 +165,13 @@ beta, y_LOO ,LOO = [], [], [] # we probably don't need this anymore
                               # thanks to scikit library
 acc, predictions, confidence_scores = [], [], []
 for k in range(Ntrial):
-    LOO_index = range((k-1)*Nsample, k*Nsample)
+    print k
+    LOO_index = range(k*Nsample, (k+1)*Nsample)
     train_index = list(set(range(Nface+Ncar))-set(LOO_index)) # remove one trial from dataset
                                                               # sets are cool to perform set like operations
                                                               # Here we find A-B for sets A and B
     # instantiate a logistic regression model, and fit with X and y
-    model = LogisticRegression() # cool things start here
+    model = LogisticRegression(penalty='l2', C=100000000000000) # cool things start here
                                  # scikit is a popular machine leraning library in python
                                  # good to know this but we will later use theano
                                  # for more complex algorithms
@@ -176,7 +179,10 @@ for k in range(Ntrial):
     confidence_scores.append( model.decision_function(np.mean(X[LOO_index,:],0)) )
                              # The confidence score for a sample is the signed
                              # distance of that sample to the hyperplane.  
-    predictions.append( model.predict(np.mean(X[LOO_index,:],0)) ) # compute predictions
+    single_pred = model.predict(np.mean(X[LOO_index,:],0)) 
+    print single_pred
+    del model
+    predictions.append( single_pred ) # compute predictions
                                                                    # we use average over 30 samples
  
 acc.append( accuracy_score(y[range(0,2100, Nsample)],predictions) ) # scikit's accuracy_score function
@@ -189,10 +195,60 @@ fpr, tpr, thresholds = roc_curve(y[range(0,2100, Nsample)], confidence_scores)
 auc = auc(fpr,tpr)
 
 
+# evaluate the model using 10-fold cross-validation
+scores = cross_val_score(LogisticRegression(), X, y, scoring='accuracy', cv=10)
+print scores
+print scores.mean()
 
-
-
-
+#def LOO_per_time(EEG, timebin_onset_single, Fs, Nface, Ncar, Nsample,
+#                 timebin_onset, L_timebin, chan):
+#    print ('LR using time bin %s - %s ms ...')%(timebin_onset_single,timebin_onset_single+L_timebin)
+#    x1 = int(round((timebin_onset_single-tmin)*Fs/1000));
+#    xbin = x1 + np.arange(Nsample)
+#    data1 = EEG['EEG_face'][:,xbin,:].reshape(chan, Nface) 
+#    data1 = np.transpose(data1) # 900 x 60
+#    data2 = EEG['EEG_car'][:,xbin,:].reshape(chan, Ncar) 
+#    data2 = np.transpose(data2) # 1200 x 60
+#    X = np.vstack((data1,data2))
+#    y = np.append(np.ones(Nface), np.zeros(Ncar))
+#    
+#    # leave one out
+#    Ntrial = (Nface+Ncar)/Nsample
+#
+#    acc, predictions, confidence_scores = [], [], []
+#    for k in range(Ntrial):
+#        LOO_index = range((k-1)*Nsample, k*Nsample)
+#        train_index = list(set(range(Nface+Ncar))-set(LOO_index)) # remove one trial from dataset
+#                                                                  # sets are cool to perform set like operations
+#                                                                  # Here we find A-B for sets A and B
+#        # instantiate a logistic regression model, and fit with X and y
+#        model = LogisticRegression() # cool things start here
+#                                     # scikit is a popular machine leraning library in python
+#                                     # good to know this but we will later use theano
+#                                     # for more complex algorithms
+#        model = model.fit(X[train_index,:], y[train_index])
+#        confidence_scores.append( model.decision_function(np.mean(X[LOO_index,:],0)) )
+#                                 # The confidence score for a sample is the signed
+#                                 # distance of that sample to the hyperplane.  
+#        predictions.append( model.predict(np.mean(X[LOO_index,:],0)) ) # compute predictions
+#                                                                       # we use average over 30 samples
+#     
+#    acc.append( accuracy_score(y[range(0,2100, Nsample)],predictions) ) # scikit's accuracy_score function
+#                                                               # computes Accuracy classification score
+#                                                               # note that I had to downsample y
+#                                                               # because I don't need all 2100 samples
+#                                                               # I only need 70 trials
+#    
+#    fpr, tpr, thresholds = roc_curve(y[range(0,2100, Nsample)], confidence_scores)
+#    auc_not_az = auc(fpr,tpr)     
+#    return auc_not_az, fpr, tpr      
+#
+## LOO over all time points
+#auc_all = []
+#for timebin_onset_single in timebin_onset:
+#    auc_not_az, fpr, tpr = LOO_per_time(EEG, timebin_onset_single, Fs, Nface, Ncar, Nsample,
+#                                        timebin_onset, L_timebin, chan)
+#    auc_all.append(auc_not_az)                                    
 
 
 
