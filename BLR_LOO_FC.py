@@ -105,21 +105,28 @@ for time_point in timebin_onset:
 #print model.coef_
 #print model.intercept_
 
-from ggplot import *
-p_val_features = pd.DataFrame({
-      'accuracies': acc,
-      'time': timebin_onset
-   })
-print ggplot(p_val_features, aes(x ='time', y= 'accuracies')) + \
-      geom_line() + ggtitle('Leave One Out' ) + \
-      labs('time (msec)','Accuracies') + \
-      ylim(0,1) 
+#from ggplot import *
+#p_val_features = pd.DataFrame({
+#      'accuracies': acc,
+#      'time': timebin_onset
+#   })
+#print ggplot(p_val_features, aes(x ='time', y= 'accuracies')) + \
+#      geom_line() + \
+#      ggtitle('Leave One Out ; Subject ' + my_subject + '; Coherence level ' + str(cohlevel) ) + \
+#      labs('time (msec)','Accuracies') + \
+#      ylim(0,1)  +\
+#      scale_y_continuous(breaks=(0.1,0.25,0.5,0.75,1))
       
 
-#
-#
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+import seaborn as sns
 
-
+sns.axes_style("darkgrid")
+plt.plot(timebin_onset, acc, sns.xkcd_rgb["pale red"], lw=3)
+plt.ylabel('Accuracies',fontsize=14)
+plt.xlabel('time(msec)',fontsize=14)
+plt.title('Leave One Out ; Subject ' + my_subject + '; Coherence level ' + str(cohlevel))
 
 ##from sklearn.cross_validation import KFold
 #from sklearn.cross_validation import LeaveOneOut
