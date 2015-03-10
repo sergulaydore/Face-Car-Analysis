@@ -137,7 +137,7 @@ my_subject = 'paul21apr04'
 
 gaincorrect=1;
 Fs=1000;
-StartOffset=0 #-200;
+StartOffset= -200;
 duration=1000-StartOffset;
 Unit=1e7;
 
@@ -185,7 +185,7 @@ g_W = T.grad(cost=cost, wrt=classifier.W)
 g_b = T.grad(cost=cost, wrt=classifier.b)
 
 # specify how to update the parameters of the model 
-learning_rate = 0.001
+learning_rate = 0.005
 updates = [(classifier.W, classifier.W - learning_rate * g_W),
            (classifier.b, classifier.b - learning_rate * g_b)]
 
@@ -212,8 +212,7 @@ predict = theano.function(
 """ Leave One Out """
 acc = []
 # LOO loop
-for time_point in timebin_onset:
-    
+for time_point in timebin_onset: 
     print ('LR using time bin %s - %s ms ...')%(time_point,time_point+L_timebin)
     x1 = int(round((time_point-tmin)*Fs/1000));
     xbin = x1 + np.arange(Nsample)
@@ -225,7 +224,7 @@ for time_point in timebin_onset:
     Ntrial = (Nface+Ncar)/Nsample
     
     predictions = []
-    training_steps = 10000
+    training_steps = 1000
     cost_all = []
     err_all=[]
     
@@ -237,6 +236,19 @@ for time_point in timebin_onset:
         ytrain = y_eeg[train_index]
         Xtest = np.mean(X_eeg[LOO_index,:],0).reshape(1, chan)
         ytest = y_eeg[LOO_index[0:1]]
+        
+#        # instantiate a logistic regression model, and fit with X and y
+#        model = LogisticRegression(penalty='l2',C=1000000) # cool things start here
+#                                     # scikit is a popular machine leraning library in python
+#                                     # good to know this but we will later use theano
+#                                     # for more complex algorithms
+#        model.fit(Xtrain, ytrain)
+##        confidence_scores.append( model.decision_function(np.mean(X[LOO_index,:],0)) )
+#                                 # The confidence score for a sample is the signed
+#                                 # distance of that sample to the hyperplane. 
+#        single_pred = model.predict(Xtest) 
+#        predictions.append(single_pred) # compute predictions
+
         
         classifier.W.set_value(np.asarray(
             rng.uniform(
