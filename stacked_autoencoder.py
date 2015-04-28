@@ -15,6 +15,28 @@ from sklearn import decomposition
 #     :param dataset: the path to the dataset (here MNIST)
 #     '''
 
+def gradient_updates_momentum(cost, params, learning_rate, momentum=0.9):
+
+    # Make sure momentum is a sane value
+    assert momentum < 1 and momentum >= 0
+    # List of update steps for each parameter
+    updates = []
+    # Just gradient descent on cost
+    for param in params:
+        # For each parameter, we'll create a param_update shared variable.
+        # This variable will keep track of the parameter's update step across iterations.
+        # We initialize it to 0
+        param_update = theano.shared(param.get_value()*0.)
+        # Each parameter is updated by taking a step in the direction of the gradient.
+        # However, we also "mix in" the previous step according to the given momentum value.
+        # Note that when updating param_update, we are using its old value and also the new gradient step.
+        updates.append((param, param - learning_rate*param_update))
+        # Note that we don't need to derive backpropagation to compute updates - just use T.grad!
+        updates.append((param_update, momentum*param_update + (1. - momentum)*T.grad(cost, param)))
+    return updates    
+    
+
+
 def shared_dataset(data_x, data_y, borrow=True):
     """ Function that loads the dataset into shared variables
 
@@ -170,10 +192,10 @@ class dA(object):
                      
          cost = T.mean((self.x-self.z)**2)
          gparams = T.grad(cost, self.params)
-         updates = [(param, param-learning_rate * gparam)
-                     for param, gparam in zip(self.params, gparams)
-                     ]
-#         updates = gradient_updates_momentum(cost, self.params)            
+         # updates = [(param, param-learning_rate * gparam)
+         #             for param, gparam in zip(self.params, gparams)
+         #             ]
+         updates = gradient_updates_momentum(cost, self.params, learning_rate)            
                      
          return (cost, updates)  
 
@@ -307,6 +329,7 @@ class SdA(object):
 
 	def build_finetune_functions(self, datasets, batch_size, learning_rate):
 
+
 		(train_set_x, train_set_y) = datasets[0]
 		(valid_set_x, valid_set_y) = datasets[1]
 		(test_set_x, test_set_y) = datasets[2]
@@ -323,9 +346,13 @@ class SdA(object):
 		gparams = T.grad(self.finetune_cost, self.params)
 
 		# compute list of fine-tuning updates
-		updates = [ (param, param - gparam * learning_rate) 
-					 for param, gparam in zip(self.params, gparams)
-					 ]
+		# updates = [ (param, param - gparam * learning_rate) 
+		# 			 for param, gparam in zip(self.params, gparams)
+		# 			 ]
+
+		updates = gradient_updates_momentum(self.finetune_cost, self.params, learning_rate) 
+
+
 
 		train_fn = theano.function( inputs = [index], outputs = self.finetune_cost, updates = updates,
 									givens = { self.x: train_set_x[ index * batch_size: (index + 1) * batch_size],
@@ -359,7 +386,7 @@ pca = decomposition.PCA(n_components=None, copy=True, whiten=True)
 pca.fit(X_eeg)
 X_eeg = pca.transform(X_eeg)
 
-finetune_lr=0.1; pretraining_epochs=500; pretrain_lr=0.3; training_epochs=1000; batch_size=10
+finetune_lr=0.08; pretraining_epochs=500; pretrain_lr=0.08; training_epochs=1000; batch_size=10
 
 X_train_valid, test_set_x, y_train_valid, test_set_y = cross_validation.train_test_split( X_eeg, y_eeg,
 																				 test_size=0.1, random_state=0)
@@ -389,20 +416,20 @@ for i in xrange(sda.n_layers):
 	for epoch in xrange(pretraining_epochs):
 		# go through the training set
 		c = []
-		if epoch < 50:
-			pretrain_lr = 0.05
-		elif 50 <= epoch < 100:
-			pretrain_lr = 0.4
-		elif 100 <= epoch < 200:
-			pretrain_lr = 0.6
-		elif 200 <= epoch < 300:
-			pretrain_lr = 0.8
-		elif 300 <= epoch < 400:
-			pretrain_lr = 1
-		elif 400 <= epoch < 500:
-			pretrain_lr = 2
-		else:
-			pretrain_lr = 3
+		# if epoch < 50:
+		# 	pretrain_lr = 0.05
+		# elif 50 <= epoch < 100:
+		# 	pretrain_lr = 0.4
+		# elif 100 <= epoch < 200:
+		# 	pretrain_lr = 0.6
+		# elif 200 <= epoch < 300:
+		# 	pretrain_lr = 0.8
+		# elif 300 <= epoch < 400:
+		# 	pretrain_lr = 1
+		# elif 400 <= epoch < 500:
+		# 	pretrain_lr = 2
+		# else:
+		# 	pretrain_lr = 3
 		for batch_index in xrange(n_train_batches):
 			c.append(pretrain_fns[i](index = batch_index, corruption = corruption_levels[i], lr = pretrain_lr))
 		print 'Pre-training layer %i, epoch %d, cost ' %(i, epoch)
@@ -416,9 +443,9 @@ print >> sys.stderr, ('The pretraining code for file ' +
                       ' ran for %.2fm' % ((end_time - start_time) / 60.))
 
 plt.figure()
-plt.plot(c_all[0],color = 'r')
-# plt.plot(c_all[1],color = 'b')
-# plt.show()
+# plt.plot(c_all[0],color = 'r')
+plt.plot(c_all[1],color = 'b')
+plt.show()
 
 print '... getting the finetuning functions'
 train_fn, validate_model, test_model = sda.build_finetune_functions(datasets = datasets,
@@ -439,15 +466,21 @@ start_time = time.clock()
 done_looping = False
 epoch = 0
 
+train_cost_all = []
+valid_cost_all = []
+test_cost_all = []
+
 while (epoch < training_epochs) and (not done_looping):
 	epoch +=1
 	for minibatch_index in xrange(n_train_batches):
 		minibatch_avg_cost = train_fn(minibatch_index)
 		iter = (epoch - 1) * n_train_batches + minibatch_index
+		train_cost_all.append(minibatch_avg_cost)
 
 		if (iter + 1) % validation_frequency == 0:
 			validation_losses = validate_model()
 			this_validation_loss = numpy.mean(validation_losses)
+			valid_cost_all.append(this_validation_loss)
 			print 'epoch %i, minibatch %i/%i, validation_error %f %%' \
 					% (epoch, minibatch_index+1, n_train_batches, this_validation_loss * 100.)
 
@@ -476,6 +509,10 @@ print 'Optimization completed with best validation score of %f %%' \
 		% (best_validation_loss * 100., best_iter + 1, test_score * 100.)
 
 print >> sys.stderr ,('The training code ran for %.2f m' % ((end_time - start_time) / 60.))
+
+plt.figure()
+plt.plot(valid_cost_all,color = 'b')
+plt.show()
 
 
 
