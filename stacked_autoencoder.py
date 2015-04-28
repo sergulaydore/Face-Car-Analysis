@@ -237,7 +237,7 @@ class LogisticRegression(object):
 
 class SdA(object):
 	""" Stacked denoising auto-encoder class (SdA) """
-	def __init__(self, numpy_rng, theano_rng = None, n_ins = 110, hidden_layers_sizes = [60, 30], 
+	def __init__(self, numpy_rng, theano_rng = None, n_ins = 110, hidden_layers_sizes = [80, 30, 10], 
 				n_outs = 2, corruption_levels = [0.1, 0.1]):
 
 		self.sigmoid_layers = []
@@ -353,11 +353,13 @@ class SdA(object):
 
 from data_prep import *
 
+from sklearn.utils import shuffle
+X_eeg, y_eeg = shuffle(X_eeg, y_eeg, random_state=0)
 pca = decomposition.PCA(n_components=None, copy=True, whiten=True)
 pca.fit(X_eeg)
 X_eeg = pca.transform(X_eeg)
 
-finetune_lr=0.1; pretraining_epochs=1000; pretrain_lr=0.003; training_epochs=1000; batch_size=10
+finetune_lr=0.1; pretraining_epochs=500; pretrain_lr=0.3; training_epochs=1000; batch_size=10
 
 X_train_valid, test_set_x, y_train_valid, test_set_y = cross_validation.train_test_split( X_eeg, y_eeg,
 																				 test_size=0.1, random_state=0)
@@ -387,6 +389,14 @@ for i in xrange(sda.n_layers):
 	for epoch in xrange(pretraining_epochs):
 		# go through the training set
 		c = []
+		if epoch < 50:
+			pretrain_lr = 0.05
+		elif 50 <= epoch < 100:
+			pretrain_lr = 0.4
+		elif 100 <= epoch < 200:
+			pretrain_lr = 0.8
+		else:
+			pretrain_lr = 1
 		for batch_index in xrange(n_train_batches):
 			c.append(pretrain_fns[i](index = batch_index, corruption = corruption_levels[i], lr = pretrain_lr))
 		print 'Pre-training layer %i, epoch %d, cost ' %(i, epoch)
@@ -399,13 +409,68 @@ print >> sys.stderr, ('The pretraining code for file ' +
                       __name__ +
                       ' ran for %.2fm' % ((end_time - start_time) / 60.))
 
-plt.figure
+plt.figure()
 plt.plot(c_all[0],color = 'r')
-plt.show()
+# plt.plot(c_all[1],color = 'b')
+# plt.show()
 
-plt.figure
-plt.plot(c_all[1],color = 'r')
-plt.show()
+print '... getting the finetuning functions'
+train_fn, validate_model, test_model = sda.build_finetune_functions(datasets = datasets,
+																	batch_size = batch_size,
+																	learning_rate = finetune_lr
+																	)
+
+print '... finetunning the model'
+patience = 100 * n_train_batches # look as this many examples regardless
+patience_increase = 2. # wait this much longer when a new best is found
+improvement_threshold = 0.995 # a relative improvement of this much is considered significant
+validation_frequency = min(n_train_batches, patience / 2) # go through this many minibatches before checking
+                                                          # the network on the validation set; in this case we
+                                                          # check every epoch
+best_validation_loss = numpy.inf
+test_score = 0.
+start_time = time.clock()
+done_looping = False
+epoch = 0
+
+while (epoch < training_epochs) and (not done_looping):
+	epoch +=1
+	for minibatch_index in xrange(n_train_batches):
+		minibatch_avg_cost = train_fn(minibatch_index)
+		iter = (epoch - 1) * n_train_batches + minibatch_index
+
+		if (iter + 1) % validation_frequency == 0:
+			validation_losses = validate_model()
+			this_validation_loss = numpy.mean(validation_losses)
+			print 'epoch %i, minibatch %i/%i, validation_error %f %%' \
+					% (epoch, minibatch_index+1, n_train_batches, this_validation_loss * 100.)
+
+			# if we got the best validation score until now
+			if this_validation_loss < best_validation_loss:
+				# improve patience if loss improvement is good enough
+				if this_validation_loss < best_validation_loss * improvement_threshold:
+					patience = max(patience, iter * patience_increase)
+				# save best validation score and iteration numberr
+				best_validation_loss = this_validation_loss
+				best_iter = iter
+
+				# test it on the test set
+				test_losses = test_model()
+				test_score = numpy.mean(test_losses)
+				print 'epoch %i, minibatch %i/%i, test error of best model %f %%' \
+						%(epoch, minibatch_index + 1, n_train_batches, test_score * 100.)
+
+
+		if patience <= iter:
+			done_looping = True
+			break
+end_time = time.clock()
+print 'Optimization completed with best validation score of %f %%' \
+		'on iteration %i, with test performance %f %%' \
+		% (best_validation_loss * 100., best_iter + 1, test_score * 100.)
+
+print >> sys.stderr ,('The training code ran for %.2f m' % ((end_time - start_time) / 60.))
+
 
 
 
