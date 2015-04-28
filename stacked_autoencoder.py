@@ -394,9 +394,15 @@ for i in xrange(sda.n_layers):
 		elif 50 <= epoch < 100:
 			pretrain_lr = 0.4
 		elif 100 <= epoch < 200:
+			pretrain_lr = 0.6
+		elif 200 <= epoch < 300:
 			pretrain_lr = 0.8
-		else:
+		elif 300 <= epoch < 400:
 			pretrain_lr = 1
+		elif 400 <= epoch < 500:
+			pretrain_lr = 2
+		else:
+			pretrain_lr = 3
 		for batch_index in xrange(n_train_batches):
 			c.append(pretrain_fns[i](index = batch_index, corruption = corruption_levels[i], lr = pretrain_lr))
 		print 'Pre-training layer %i, epoch %d, cost ' %(i, epoch)
