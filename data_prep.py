@@ -12,8 +12,10 @@ Fs=1000;
 StartOffset= -200;
 duration=1000-StartOffset;
 Unit=1e7;
-chan = 60 
-n_features = chan
+channels_left = [24, 53, 54] # P3, PO7, PO5
+channels_right = [52, 58, 59] # P6, PO6, PO8
+channels_middle = [10, 42, 15, 43, 20] # FCz, C1, Cz, C2, CPz
+channels = channels_left + channels_middle + channels_right
 
 tmin = StartOffset
 timebin_onset = range(0, 500, 50)
@@ -54,11 +56,11 @@ for files in files_in_dir:
 
 		Nface += np.shape(EEG['EEG_face'])[2]
 		Ncar += np.shape(EEG['EEG_car'])[2]
-		EEG1 = EEG['EEG_face']
-		EEG2 = EEG['EEG_car']
+		EEG1 = EEG['EEG_face'][channels,:,:]
+		EEG2 = EEG['EEG_car'][channels,:,:]
 
 		EEG1summary =  np.mean(EEG1[:,x1[0]- L_timebin/2:x1[0]+L_timebin/2 +1,0:Nface+1], 1)
-		EEG2summary = np.mean(EEG2[:,x1[0]- L_timebin/2:x1[0]+L_timebin/2 +1,0:Nface+1], 1)
+		EEG2summary = np.mean(EEG2[:,x1[0]- L_timebin/2:x1[0]+L_timebin/2 +1,0:Ncar+1], 1)
 		for xbin in x1[1:]:
 			EEG1summary = np.vstack((EEG1summary, np.mean(EEG1[:,xbin- L_timebin/2:xbin+L_timebin/2 +1,0:Nface+1], 1)))
 			EEG2summary = np.vstack((EEG2summary, np.mean(EEG2[:,xbin- L_timebin/2:xbin+L_timebin/2 +1,0:Ncar+1], 1)))
