@@ -359,24 +359,20 @@ class SdA(object):
 												self.y: train_set_y[ index * batch_size: (index + 1) * batch_size ]}, 
 									name = 'train')
 
-		test_score_i = theano.function( inputs = [index], outputs = self.errors,
-										givens = {self.x: test_set_x[ index * batch_size: (index + 1) * batch_size],
-												  self.y: test_set_y[ index * batch_size: (index + 1) * batch_size] }, 
-										name = 'test' )
+		test_score = theano.function( inputs = [], outputs = self.errors,
+										givens={self.x: test_set_x, self.y: test_set_y}, name = 'test' )
 
-		valid_score_i = theano.function( inputs = [index], outputs = self.errors,
-										givens = {self.x: valid_set_x[ index * batch_size: (index + 1) * batch_size],
-												  self.y: valid_set_y[ index * batch_size: (index + 1) * batch_size] }, 
-										name = 'valid' )
+		valid_score = theano.function( inputs = [ ], outputs = self.errors,
+			givens={self.x: valid_set_x, self.y: valid_set_y}, name = 'valid' )
 		# create a function that scans the entire validation set
-		def valid_score():
-			return [valid_score_i(i) for i in xrange(n_valid_batches)]
+		# def valid_score():
+		# 	return [valid_score_i(valid_set_x, valid_set_y)]
 
-		# create a function that scans the entire test set
-		def test_score():
-			return [test_score_i(i) for i in xrange(n_test_batches)]
+		# # create a function that scans the entire test set
+		# def test_score():
+		# 	return [test_score_i(test_set_x, test_set_y)]
 
-		return train_fn, valid_score, test_score
+		return train_fn, valid_score(), test_score()
 
 from data_prep import *
 
@@ -386,7 +382,7 @@ pca = decomposition.PCA(n_components=None, copy=True, whiten=True)
 pca.fit(X_eeg)
 X_eeg = pca.transform(X_eeg)
 
-finetune_lr=0.08; pretraining_epochs=500; pretrain_lr=0.08; training_epochs=1000; batch_size=10
+finetune_lr=0.08; pretraining_epochs=10; pretrain_lr=0.08; training_epochs=1000; batch_size=10
 
 X_train_valid, test_set_x, y_train_valid, test_set_y = cross_validation.train_test_split( X_eeg, y_eeg,
 																				 test_size=0.1, random_state=0)
@@ -453,66 +449,68 @@ train_fn, validate_model, test_model = sda.build_finetune_functions(datasets = d
 																	learning_rate = finetune_lr
 																	)
 
-print '... finetunning the model'
-patience = 100 * n_train_batches # look as this many examples regardless
-patience_increase = 2. # wait this much longer when a new best is found
-improvement_threshold = 0.995 # a relative improvement of this much is considered significant
-validation_frequency = min(n_train_batches, patience / 2) # go through this many minibatches before checking
-                                                          # the network on the validation set; in this case we
-                                                          # check every epoch
-best_validation_loss = numpy.inf
-test_score = 0.
-start_time = time.clock()
-done_looping = False
-epoch = 0
+minibatch_avg_cost = train_fn(3)
+validation_losses = validate_model()
+# print '... finetunning the model'
+# patience = 100 * n_train_batches # look as this many examples regardless
+# patience_increase = 2. # wait this much longer when a new best is found
+# improvement_threshold = 0.995 # a relative improvement of this much is considered significant
+# validation_frequency = min(n_train_batches, patience / 2) # go through this many minibatches before checking
+#                                                           # the network on the validation set; in this case we
+#                                                           # check every epoch
+# best_validation_loss = numpy.inf
+# test_score = 0.
+# start_time = time.clock()
+# done_looping = False
+# epoch = 0
 
-train_cost_all = []
-valid_cost_all = []
-test_cost_all = []
+# train_cost_all = []
+# valid_cost_all = []
+# test_cost_all = []
 
-while (epoch < training_epochs) and (not done_looping):
-	epoch +=1
-	for minibatch_index in xrange(n_train_batches):
-		minibatch_avg_cost = train_fn(minibatch_index)
-		iter = (epoch - 1) * n_train_batches + minibatch_index
-		train_cost_all.append(minibatch_avg_cost)
+# while (epoch < training_epochs) and (not done_looping):
+# 	epoch +=1
+# 	for minibatch_index in xrange(n_train_batches):
+# 		minibatch_avg_cost = train_fn(minibatch_index)
+# 		iter = (epoch - 1) * n_train_batches + minibatch_index
+# 		train_cost_all.append(minibatch_avg_cost)
 
-		if (iter + 1) % validation_frequency == 0:
-			validation_losses = validate_model()
-			this_validation_loss = numpy.mean(validation_losses)
-			valid_cost_all.append(this_validation_loss)
-			print 'epoch %i, minibatch %i/%i, validation_error %f %%' \
-					% (epoch, minibatch_index+1, n_train_batches, this_validation_loss * 100.)
+# 		if (iter + 1) % validation_frequency == 0:
+# 			validation_losses = validate_model()
+# 			this_validation_loss = numpy.mean(validation_losses)
+# 			valid_cost_all.append(this_validation_loss)
+# 			print 'epoch %i, minibatch %i/%i, validation_error %f %%' \
+# 					% (epoch, minibatch_index+1, n_train_batches, this_validation_loss * 100.)
 
-			# if we got the best validation score until now
-			if this_validation_loss < best_validation_loss:
-				# improve patience if loss improvement is good enough
-				if this_validation_loss < best_validation_loss * improvement_threshold:
-					patience = max(patience, iter * patience_increase)
-				# save best validation score and iteration numberr
-				best_validation_loss = this_validation_loss
-				best_iter = iter
+# 			# if we got the best validation score until now
+# 			if this_validation_loss < best_validation_loss:
+# 				# improve patience if loss improvement is good enough
+# 				if this_validation_loss < best_validation_loss * improvement_threshold:
+# 					patience = max(patience, iter * patience_increase)
+# 				# save best validation score and iteration numberr
+# 				best_validation_loss = this_validation_loss
+# 				best_iter = iter
 
-				# test it on the test set
-				test_losses = test_model()
-				test_score = numpy.mean(test_losses)
-				print 'epoch %i, minibatch %i/%i, test error of best model %f %%' \
-						%(epoch, minibatch_index + 1, n_train_batches, test_score * 100.)
+# 				# test it on the test set
+# 				test_losses = test_model()
+# 				test_score = numpy.mean(test_losses)
+# 				print 'epoch %i, minibatch %i/%i, test error of best model %f %%' \
+# 						%(epoch, minibatch_index + 1, n_train_batches, test_score * 100.)
 
 
-		if patience <= iter:
-			done_looping = True
-			break
-end_time = time.clock()
-print 'Optimization completed with best validation score of %f %%' \
-		'on iteration %i, with test performance %f %%' \
-		% (best_validation_loss * 100., best_iter + 1, test_score * 100.)
+# 		if patience <= iter:
+# 			done_looping = True
+# 			break
+# end_time = time.clock()
+# print 'Optimization completed with best validation score of %f %%' \
+# 		'on iteration %i, with test performance %f %%' \
+# 		% (best_validation_loss * 100., best_iter + 1, test_score * 100.)
 
-print >> sys.stderr ,('The training code ran for %.2f m' % ((end_time - start_time) / 60.))
+# print >> sys.stderr ,('The training code ran for %.2f m' % ((end_time - start_time) / 60.))
 
-plt.figure()
-plt.plot(valid_cost_all,color = 'b')
-plt.show()
+# plt.figure()
+# plt.plot(valid_cost_all,color = 'b')
+# plt.show()
 
 
 
