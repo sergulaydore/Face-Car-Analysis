@@ -9,6 +9,8 @@ import time
 import matplotlib.pyplot as plt
 from sklearn import decomposition
 from sklearn.metrics import roc_auc_score, accuracy_score
+from sklearn.utils import shuffle
+from data_prep import *
 # def load_data(dataset):
 #     ''' Loads the dataset
 
@@ -368,9 +370,74 @@ class SdA(object):
 
         return train_fn, test_score, predict
 
-from data_prep import *
 
-from sklearn.utils import shuffle
+# true_values = test_set_y.owner.inputs[0].get_value() 
+def test_sda(train_set_x, test_set_x, train_set_y, test_set_y ):
+    test_set_x, test_set_y = shared_dataset(test_set_x, test_set_y)
+    train_set_x, train_set_y = shared_dataset(train_set_x, train_set_y)
+
+    datasets = [(train_set_x, train_set_y),
+                (test_set_x, test_set_y)]
+
+    n_train_batches = train_set_x.get_value(borrow = True).shape[0]
+    n_train_batches /= batch_size
+
+    numpy_rng = numpy.random.RandomState(89677)
+    print '... building the model'
+
+    sda = SdA( numpy_rng = numpy_rng)
+    print '... getting the pretraining functions'
+    pretrain_fns = sda.pretraining_functions(train_set_x = train_set_x, batch_size = batch_size)
+    start_time = time.clock()
+    corruption_levels = [.1, 0.2, 0.3]
+    c_all = np.zeros((sda.n_layers,pretraining_epochs ))
+    for i in xrange(sda.n_layers):
+        # go through pretraining epochs
+        for epoch in xrange(pretraining_epochs):
+            # go through the training set
+            c = []
+            for batch_index in xrange(n_train_batches):
+                c.append(pretrain_fns[i](index = batch_index, corruption = corruption_levels[i], lr = pretrain_lr))
+            # print 'Pre-training layer %i, epoch %d, cost ' %(i, epoch)
+            # print numpy.mean(c)
+            c_all[i, epoch] = numpy.mean(c)
+
+    end_time = time.clock()
+
+    # print >> sys.stderr, ('The pretraining code for file ' +
+    #                       __name__ +
+    #                       ' ran for %.2fm' % ((end_time - start_time) / 60.))
+
+    # plt.figure()
+    # # plt.plot(c_all[0],color = 'r')
+    # plt.plot(c_all[1],color = 'b')
+    # plt.show()
+
+    print '... getting the finetuning functions'
+    train_fn, test_model, predict = sda.build_finetune_functions(datasets = datasets, batch_size = batch_size, 
+                                                        learning_rate = finetune_lr)
+
+    # minibatch_avg_cost = train_fn(3)
+    # validation_losses = validate_model()
+    # print '... finetunning the model'
+
+    train_cost_all = []
+    test_cost_all = []
+    acc = []
+    
+    for epoch in range(training_epochs):
+
+        train_cost_minibatch = []
+        for minibatch_index in xrange(n_train_batches):
+            minibatch_avg_cost = train_fn(minibatch_index)
+            train_cost_minibatch.append(minibatch_avg_cost)
+        train_cost_all.append(numpy.mean(train_cost_minibatch))
+        test_losses = test_model()
+        test_cost_all.append(test_losses)
+    
+    prediction = predict()
+    return prediction
+
 X_eeg, y_eeg = shuffle(X_eeg, y_eeg, random_state=0)
 pca = decomposition.PCA(n_components=None, copy=True, whiten=True)
 pca.fit(X_eeg)
@@ -378,80 +445,21 @@ X_eeg = pca.transform(X_eeg)
 
 finetune_lr=0.1; pretraining_epochs=1000; pretrain_lr=0.08; training_epochs=200; batch_size=10
 
-train_set_x, test_set_x, train_set_y, test_set_y = cross_validation.train_test_split( X_eeg, y_eeg,
-                                                                                 test_size=0.4, random_state=2)
-test_set_x, test_set_y = shared_dataset(test_set_x, test_set_y)
-train_set_x, train_set_y = shared_dataset(train_set_x, train_set_y)
+loo = cross_validation.LeaveOneOut(np.shape(X_eeg)[0])
+predictions = []
+for train_index, test_index in loo:
+    print("TRAIN:", train_index, "TEST:", test_index)
+    train_set_x, test_set_x = X_eeg[train_index], X_eeg[test_index]
+    train_set_y, test_set_y = y_eeg[train_index], y_eeg[test_index]
+    prediction = test_sda(train_set_x, test_set_x, train_set_y, test_set_y )
+    predictions.append(prediction)
 
-datasets = [(train_set_x, train_set_y),
-            (test_set_x, test_set_y)]
+# train_set_x, test_set_x, train_set_y, test_set_y = cross_validation.train_test_split( X_eeg, y_eeg,
+#                                                                                  test_size=0.4, random_state=2)
 
-n_train_batches = train_set_x.get_value(borrow = True).shape[0]
-n_train_batches /= batch_size
+#prediction = test_sda(train_set_x, test_set_x, train_set_y, test_set_y )
+print accuracy_score(y_eeg, predictions)
 
-numpy_rng = numpy.random.RandomState(89677)
-print '... building the model'
-
-sda = SdA( numpy_rng = numpy_rng)
-print '... getting the pretraining functions'
-pretrain_fns = sda.pretraining_functions(train_set_x = train_set_x, batch_size = batch_size)
-start_time = time.clock()
-corruption_levels = [.1, 0.2, 0.3]
-c_all = np.zeros((sda.n_layers,pretraining_epochs ))
-for i in xrange(sda.n_layers):
-    # go through pretraining epochs
-    for epoch in xrange(pretraining_epochs):
-        # go through the training set
-        c = []
-        for batch_index in xrange(n_train_batches):
-            c.append(pretrain_fns[i](index = batch_index, corruption = corruption_levels[i], lr = pretrain_lr))
-        print 'Pre-training layer %i, epoch %d, cost ' %(i, epoch)
-        print numpy.mean(c)
-        c_all[i, epoch] = numpy.mean(c)
-
-end_time = time.clock()
-
-print >> sys.stderr, ('The pretraining code for file ' +
-                      __name__ +
-                      ' ran for %.2fm' % ((end_time - start_time) / 60.))
-
-plt.figure()
-# plt.plot(c_all[0],color = 'r')
-plt.plot(c_all[1],color = 'b')
-plt.show()
-
-print '... getting the finetuning functions'
-train_fn, test_model, predict = sda.build_finetune_functions(datasets = datasets, batch_size = batch_size, 
-                                                    learning_rate = finetune_lr)
-
-# minibatch_avg_cost = train_fn(3)
-# validation_losses = validate_model()
-print '... finetunning the model'
-
-train_cost_all = []
-test_cost_all = []
-acc = []
-true_values = test_set_y.owner.inputs[0].get_value() 
-for epoch in range(training_epochs):
-
-    train_cost_minibatch = []
-    for minibatch_index in xrange(n_train_batches):
-        minibatch_avg_cost = train_fn(minibatch_index)
-        train_cost_minibatch.append(minibatch_avg_cost)
-    train_cost_all.append(numpy.mean(train_cost_minibatch))
-    test_losses = test_model()
-    test_cost_all.append(test_losses)
-    prediction = predict()
-    acc.append(accuracy_score(true_values, prediction))
-
-
-plt.figure()
-plt.plot(acc, color = 'b')
-plt.show()
-
-plt.figure()
-plt.plot(train_cost_all, color = 'b')
-plt.show()
 
 
 
