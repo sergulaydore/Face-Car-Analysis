@@ -11,6 +11,7 @@ from sklearn import decomposition
 from sklearn.metrics import roc_auc_score, accuracy_score
 from sklearn.utils import shuffle
 from data_prep import *
+from sklearn import preprocessing
 # def load_data(dataset):
 #     ''' Loads the dataset
 
@@ -262,7 +263,7 @@ class LogisticRegression(object):
 
 class SdA(object):
     """ Stacked denoising auto-encoder class (SdA) """
-    def __init__(self, numpy_rng, theano_rng = None, n_ins = 110, hidden_layers_sizes = [80, 30, 10], 
+    def __init__(self, numpy_rng, theano_rng = None, n_ins = 110, hidden_layers_sizes = [60, 10], 
                 n_outs = 2, corruption_levels = [0.1, 0.1]):
 
         self.sigmoid_layers = []
@@ -439,10 +440,10 @@ def test_sda(train_set_x, test_set_x, train_set_y, test_set_y ):
     return prediction
 
 X_eeg, y_eeg = shuffle(X_eeg, y_eeg, random_state=0)
-pca = decomposition.PCA(n_components=None, copy=True, whiten=True)
-pca.fit(X_eeg)
-X_eeg = pca.transform(X_eeg)
-
+# pca = decomposition.PCA(n_components=None, copy=True, whiten=True)
+# pca.fit(X_eeg)
+# X_eeg = pca.transform(X_eeg)
+X_eeg = preprocessing.normalize(X_eeg, axis = 1)
 finetune_lr=0.1; pretraining_epochs=1000; pretrain_lr=0.08; training_epochs=200; batch_size=10
 
 loo = cross_validation.LeaveOneOut(np.shape(X_eeg)[0])
