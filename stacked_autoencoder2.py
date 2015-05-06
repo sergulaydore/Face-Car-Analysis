@@ -263,8 +263,8 @@ class LogisticRegression(object):
 
 class SdA(object):
     """ Stacked denoising auto-encoder class (SdA) """
-    def __init__(self, numpy_rng, theano_rng = None, n_ins = 110, hidden_layers_sizes = [60, 10], 
-                n_outs = 2, corruption_levels = [0.1, 0.1]):
+    def __init__(self, numpy_rng, theano_rng = None, n_ins = 110, hidden_layers_sizes = [30, 5], 
+                n_outs = 2, corruption_levels = [0.1, 0.2]):
 
         self.sigmoid_layers = []
         self.dA_layers = []
