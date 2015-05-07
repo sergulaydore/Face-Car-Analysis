@@ -461,6 +461,26 @@ for train_index, test_index in loo:
 #prediction = test_sda(train_set_x, test_set_x, train_set_y, test_set_y )
 print accuracy_score(y_eeg, predictions)
 
+plt.figure()
+subjects = ['aaron25jun04', 'an02apr04', 'brook29sep04', 'david30apr04', 
+            'jeremy15jul04', 'jeremy29apr04','paul21apr04', 'steve29jun04', 'vivek23jun04']
+
+subjects = map(lambda x: x[-7:], subjects)
+
+dl_accuracy = [0.40, 0.797, 0.64, 0.55, 0.764, 0.831, 0.825, 0.66, 0.615]
+pca_10 = [0.466, 0.721, 0.683, 0.572, 0.831, 0.797, 0.6125, 0.651, 0.703]
+pca_30 = [0.531, 0.759, 0.684, 0.607, 0.752, 0.819, 0.65, 0.684, 0.779]
+plt.figure()
+plt.plot(range(len(dl_accuracy)), dl_accuracy, 'ro-', label = 'Stacked DAE')
+plt.plot(range(len(dl_accuracy)), pca_10, 'bo-', label = 'PCA - 10')
+plt.plot(range(len(dl_accuracy)), pca_30, 'go-', label = 'PCA - 30')
+plt.xticks(range(len(dl_accuracy)), subjects, rotation='vertical', fontsize=15)
+plt.ylabel('Accuracy', fontsize=15)
+plt.title('Performance of Unsupervised + Supervised Algorithms (LOO)')
+plt.legend(loc = 'best')
+plt.subplots_adjust(bottom=0.15)
+plt.show()
+
 
 
 
