@@ -368,8 +368,13 @@ class SdA(object):
         predict = theano.function (inputs = [], outputs = self.y_pred,
                                     givens = {self.x : test_set_x})
 
+        hidden_output1 = self.sigmoid_layers[0].output
+        compute_hidden_output1 = theano.function(inputs = [], outputs = [hidden_output1], 
+                                                    givens = {self.x : train_set_x})
+#        output1 = compute_hidden_output(X_eeg)
 
-        return train_fn, test_score, predict
+
+        return train_fn, test_score, predict, compute_hidden_output1
 
 
 # true_values = test_set_y.owner.inputs[0].get_value() 
@@ -415,7 +420,7 @@ def test_sda(train_set_x, test_set_x, train_set_y, test_set_y ):
     # plt.show()
 
     print '... getting the finetuning functions'
-    train_fn, test_model, predict = sda.build_finetune_functions(datasets = datasets, batch_size = batch_size, 
+    train_fn, test_model, predict, compute_hidden_output1 = sda.build_finetune_functions(datasets = datasets, batch_size = batch_size, 
                                                         learning_rate = finetune_lr)
 
     # minibatch_avg_cost = train_fn(3)
@@ -437,7 +442,8 @@ def test_sda(train_set_x, test_set_x, train_set_y, test_set_y ):
         test_cost_all.append(test_losses)
     
     prediction = predict()
-    return prediction
+    hidden_output1 = compute_hidden_output1()
+    return prediction, sda, hidden_output1
 
 X_eeg, y_eeg = shuffle(X_eeg, y_eeg, random_state=0)
 # pca = decomposition.PCA(n_components=None, copy=True, whiten=True)
@@ -448,38 +454,145 @@ finetune_lr=0.1; pretraining_epochs=1000; pretrain_lr=0.08; training_epochs=200;
 
 loo = cross_validation.LeaveOneOut(np.shape(X_eeg)[0])
 predictions = []
+face_hidden_output1 = None
+car_hidden_output1 = None
 for train_index, test_index in loo:
     print("TRAIN:", train_index, "TEST:", test_index)
     train_set_x, test_set_x = X_eeg[train_index], X_eeg[test_index]
     train_set_y, test_set_y = y_eeg[train_index], y_eeg[test_index]
-    prediction = test_sda(train_set_x, test_set_x, train_set_y, test_set_y )
+    prediction, sda, hidden_output1 = test_sda(train_set_x, test_set_x, train_set_y, test_set_y )
+    hidden_output1 = hidden_output1[0]
+    if face_hidden_output1 is not None:
+        face_hidden_output1 = np.vstack((face_hidden_output1, hidden_output1[train_set_y == 0,:]))
+        car_hidden_output1 = np.vstack((car_hidden_output1, hidden_output1[train_set_y == 1,:]))
+    else:
+        face_hidden_output1 = hidden_output1[train_set_y == 0,:]
+        car_hidden_output1 = hidden_output1[train_set_y == 1,:]
     predictions.append(prediction)
+    print np.shape(face_hidden_output1)
 
 # train_set_x, test_set_x, train_set_y, test_set_y = cross_validation.train_test_split( X_eeg, y_eeg,
 #                                                                                  test_size=0.4, random_state=2)
 
+idx = 0
+f = face_hidden_output1[:,idx]
+c = car_hidden_output1[:,idx]
+
+plt.figure()
+max_data = np.r_[f, c].max()
+#bins = np.linspace(0, max_data, max_data + 1)
+plt.hist(f, normed=True, color="#6495ED", alpha=.5)
+plt.hist(c, normed=True, color="#F08080", alpha=.5)
+plt.show()
+
+channel_labels = ['L', 'L', 'L','M', 'M','M','M','M','R','R','R']
+fig, axes = plt.subplots(nrows=6, ncols=5, sharex=True, sharey=True)
+for idx, ax in enumerate(axes.flat):
+    f = face_hidden_output1[:,idx]
+    c = car_hidden_output1[:,idx]
+    im1 = ax.hist(f, normed=True, color="#6495ED", alpha=.5)
+    im1 = ax.hist(c, normed=True, color="#F08080", alpha=.5)
+    ax.set_title('Feature ' + str(idx))
+    ax.set_adjustable('box-forced')
+    # ax.set_xticklabels([0,50, 150, 250, 350, 450,500], rotation='vertical')
+    # y = np.arange(0, 11)
+    # ax.set_yticks(y)
+    # ax.set_yticklabels(channel_labels )
+
+# cax,kw = mpl.colorbar.make_axes([ax for ax in axes.flat])
+# plt.colorbar(im, cax=cax, **kw)
+
+fig.text(0.5, 0.04, 'Time', ha='center', va='center')
+fig.text(0.04, 0.5, 'Channels', ha='center', va='center', rotation='vertical')
+plt.show()
+
 #prediction = test_sda(train_set_x, test_set_x, train_set_y, test_set_y )
 print accuracy_score(y_eeg, predictions)
 
-plt.figure()
-subjects = ['aaron25jun04', 'an02apr04', 'brook29sep04', 'david30apr04', 
-            'jeremy15jul04', 'jeremy29apr04','paul21apr04', 'steve29jun04', 'vivek23jun04']
+W1 = sda.sigmoid_layers[0].W.get_value(borrow=True) # 110 x 30
+W2 = sda.sigmoid_layers[1].W.get_value(borrow=True) # 30 x 5
+min_val, max_val = np.min(abs(W1)), np.max(abs(W1))
 
-subjects = map(lambda x: x[-7:], subjects)
+import matplotlib as mpl
+channel_labels = ['L', 'L', 'L','M', 'M','M','M','M','R','R','R']
+fig, axes = plt.subplots(nrows=6, ncols=5, sharex=True, sharey=True)
+for idx, ax in enumerate(axes.flat):
+    my_image = np.transpose(W1[:,idx].reshape(len(timebin_onset), len(channels)))
+    im = ax.imshow(abs(my_image), vmin = min_val, vmax = max_val)
+    ax.set_title('Feature ' + str(idx))
+    ax.set_adjustable('box-forced')
+    ax.set_xticklabels([0,50, 150, 250, 350, 450,500], rotation='vertical')
+    y = np.arange(0, 11)
+    ax.set_yticks(y)
+    ax.set_yticklabels(channel_labels )
 
-dl_accuracy = [0.40, 0.797, 0.64, 0.55, 0.764, 0.831, 0.825, 0.66, 0.615]
-pca_10 = [0.466, 0.721, 0.683, 0.572, 0.831, 0.797, 0.6125, 0.651, 0.703]
-pca_30 = [0.531, 0.759, 0.684, 0.607, 0.752, 0.819, 0.65, 0.684, 0.779]
-plt.figure()
-plt.plot(range(len(dl_accuracy)), dl_accuracy, 'ro-', label = 'Stacked DAE')
-plt.plot(range(len(dl_accuracy)), pca_10, 'bo-', label = 'PCA - 10')
-plt.plot(range(len(dl_accuracy)), pca_30, 'go-', label = 'PCA - 30')
-plt.xticks(range(len(dl_accuracy)), subjects, rotation='vertical', fontsize=15)
-plt.ylabel('Accuracy', fontsize=15)
-plt.title('Performance of Unsupervised + Supervised Algorithms (LOO)')
-plt.legend(loc = 'best')
-plt.subplots_adjust(bottom=0.15)
+cax,kw = mpl.colorbar.make_axes([ax for ax in axes.flat])
+plt.colorbar(im, cax=cax, **kw)
+
+fig.text(0.5, 0.04, 'Time', ha='center', va='center')
+fig.text(0.04, 0.5, 'Channels', ha='center', va='center', rotation='vertical')
 plt.show()
+
+fig, ax = plt.plot()
+idx = 1
+f = face_hidden_output1[:,idx]
+c = car_hidden_output1[:,idx]
+im1 = ax.hist(f, normed=True, color="#6495ED", alpha=.5)
+im1 = ax.hist(c, normed=True, color="#F08080", alpha=.5)
+ax.set_title('Feature ' + str(idx))
+plt.show()
+
+# test reshape
+# plt.figure()
+# data=np.arange(110).reshape((11,10))       
+# plt.imshow(data)
+# plt.title('Main title')
+# plt.colorbar()
+# plt.show() 
+
+
+# from utils import tile_raster_images
+
+# try:
+#     import PIL.Image as Image
+# except ImportError:
+#     import Image
+
+# image = Image.fromarray(tile_raster_images(
+#         X=sda.dA_layers[0].W.get_value(borrow=True).T,
+#         img_shape=(11, 10), tile_shape=(6, 5),
+#         tile_spacing=(1, 1)))
+# image.save('filters_corruption_first_layer.png')
+
+# image = Image.fromarray(tile_raster_images(
+#         X=sda.dA_layers[1].W.get_value(borrow=True).T,
+#         img_shape=(30, 1), tile_shape=(1, 5),
+#         tile_spacing=(1, 1)))
+# image.save('filters_corruption_second_layer.png')
+
+# plt.figure()
+# subjects = ['aaron25jun04', 'an02apr04', 'brook29sep04', 'david30apr04', 
+#             'jeremy15jul04', 'jeremy29apr04','paul21apr04', 'steve29jun04', 'vivek23jun04']
+
+# subjects = map(lambda x: x[-7:], subjects)
+
+# dl_accuracy = [0.40, 0.797, 0.64, 0.55, 0.764, 0.831, 0.825, 0.66, 0.615]
+# pca_10 = [0.466, 0.721, 0.683, 0.572, 0.831, 0.797, 0.6125, 0.651, 0.703]
+# pca_30 = [0.531, 0.759, 0.684, 0.607, 0.752, 0.819, 0.65, 0.684, 0.779]
+# dl_all_subjects = np.ones(np.shape(dl_accuracy)) * 0.68
+# dl_7_subjects = np.ones(np.shape(dl_accuracy)) * 0.69
+
+
+# plt.plot(range(len(dl_accuracy)), dl_accuracy, 'ro-', label = 'Stacked DAE')
+# plt.plot(range(len(dl_accuracy)), dl_all_subjects, 'm0-', label = 'Stacked DAE - all subjects')
+# plt.plot(range(len(dl_accuracy)), pca_10, 'bo-', label = 'PCA - 10')
+# plt.plot(range(len(dl_accuracy)), pca_30, 'go-', label = 'PCA - 30')
+# plt.xticks(range(len(dl_accuracy)), subjects, rotation='vertical', fontsize=15)
+# plt.ylabel('Accuracy', fontsize=15)
+# plt.title('Performance of Unsupervised + Supervised Algorithms (LOO)')
+# plt.legend(loc = 'best')
+# plt.subplots_adjust(bottom=0.15)
+# plt.show()
 
 
 
